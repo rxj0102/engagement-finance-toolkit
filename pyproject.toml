@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engagement-finance-toolkit"
+version = "0.1.0"
+description = "Synthetic engagement/account finance toolkit: budgeting, time & expense, invoicing, and discrepancy detection for professional-services engagements."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "rxj0102" }]
+dependencies = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "jupyter>=1.0"]
+
+[project.scripts]
+engagement-finance-toolkit = "engagement_finance_toolkit.run_pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
