@@ -103,11 +103,19 @@ _ES_FIRST_DATA_ROW = 4
 
 
 def build_engagement_summary_sheet(
-    wb: Workbook, engagements: list[Engagement], engagement_summary_df: pd.DataFrame, as_of: date
+    wb: Workbook,
+    engagements: list[Engagement],
+    engagement_summary_df: pd.DataFrame,
+    as_of: date,
+    ba_last_row: int,
+    dq_last_row: int,
 ) -> None:
     ws = wb.create_sheet("Engagement Summary")
     _title(ws, "Engagement Portfolio Summary", f"Synthetic data, as of {as_of.isoformat()} -- for portfolio demonstration only")
     _write_header_row(ws, _ES_HEADERS, row=3)
+
+    ba_rng = lambda col: f"'Budget vs Actual'!${col}${_BA_FIRST_DATA_ROW}:${col}${ba_last_row}"
+    dq_rng = lambda col: f"'Discrepancy Report'!${col}${_DQ_FIRST_DATA_ROW}:${col}${dq_last_row}"
 
     summary_by_id = engagement_summary_df.set_index("engagement_id")
     for i, engagement in enumerate(engagements):
@@ -143,8 +151,8 @@ def build_engagement_summary_sheet(
 
         formulas = {
             "L": f"=J{r}+K{r}",
-            "N": f"=SUMIFS('Budget vs Actual'!F:F,'Budget vs Actual'!A:A,A{r})",
-            "O": f"=SUMIFS('Budget vs Actual'!I:I,'Budget vs Actual'!A:A,A{r})",
+            "N": f"=SUMIFS({ba_rng('F')},{ba_rng('A')},A{r})",
+            "O": f"=SUMIFS({ba_rng('I')},{ba_rng('A')},A{r})",
             "P": f'=IF(H{r}=0,"",N{r}/H{r})',
             "Q": f'=IF(L{r}=0,"",O{r}/L{r})',
             "R": f"=P{r}-M{r}",
@@ -153,8 +161,8 @@ def build_engagement_summary_sheet(
                 f'IF(R{r}>{TRENDING_OVER_VARIANCE},"Trending Over Budget",'
                 f'IF(R{r}<{BEHIND_PACE_VARIANCE},"Behind Pace / Under-Utilized","On Track")))'
             ),
-            "T": f"=COUNTIF('Discrepancy Report'!B:B,A{r})",
-            "U": f"=SUMIF('Discrepancy Report'!B:B,A{r},'Discrepancy Report'!G:G)",
+            "T": f"=COUNTIF({dq_rng('B')},A{r})",
+            "U": f"=SUMIF({dq_rng('B')},A{r},{dq_rng('G')})",
         }
         for col, formula in formulas.items():
             cell = ws[f"{col}{r}"]
@@ -481,17 +489,18 @@ def build_portfolio_dashboard_sheet(
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
 
+    ba_rng = lambda col: f"'Budget vs Actual'!${col}${_BA_FIRST_DATA_ROW}:${col}${ba_last_row}"
     months = sorted(budget_actual_df["month"].unique())
     trend_first_row = trend_header_row + 1
     for i, month in enumerate(months):
         r = trend_first_row + i
         ws.cell(row=r, column=1, value=month).number_format = DATE_FMT
         ws.cell(row=r, column=1).font = INPUT_FONT
-        ws.cell(row=r, column=2, value=f"=SUMIFS('Budget vs Actual'!E:E,'Budget vs Actual'!D:D,A{r})")
-        ws.cell(row=r, column=3, value=f"=SUMIFS('Budget vs Actual'!F:F,'Budget vs Actual'!D:D,A{r})")
+        ws.cell(row=r, column=2, value=f"=SUMIFS({ba_rng('E')},{ba_rng('D')},A{r})")
+        ws.cell(row=r, column=3, value=f"=SUMIFS({ba_rng('F')},{ba_rng('D')},A{r})")
         ws.cell(row=r, column=4, value=f'=IF(B{r}=0,"",C{r}/B{r})')
-        ws.cell(row=r, column=5, value=f"=SUMIFS('Budget vs Actual'!I:I,'Budget vs Actual'!D:D,A{r})")
-        ws.cell(row=r, column=6, value=f"=SUMIFS('Budget vs Actual'!J:J,'Budget vs Actual'!D:D,A{r})")
+        ws.cell(row=r, column=5, value=f"=SUMIFS({ba_rng('I')},{ba_rng('D')},A{r})")
+        ws.cell(row=r, column=6, value=f"=SUMIFS({ba_rng('J')},{ba_rng('D')},A{r})")
         ws.cell(row=r, column=7, value=f'=IF(E{r}=0,"",F{r}/E{r})')
         for col in (2, 3):
             ws.cell(row=r, column=col).number_format = "#,##0"
@@ -581,10 +590,16 @@ def build_workbook(
     wb = Workbook()
     wb.remove(wb.active)
 
-    build_engagement_summary_sheet(wb, engagements, engagement_summary_df, as_of)
-    ba_last_row = build_budget_actual_sheet(wb, engagements, budget_actual_df, as_of)
+    # Row counts are known from the source DataFrames before any sheet is written, so
+    # cross-sheet formulas can use bounded ranges (fast) instead of whole-column refs (slow).
+    ba_last_row = _BA_FIRST_DATA_ROW + len(budget_actual_df) - 1
+    dq_last_row = max(_DQ_FIRST_DATA_ROW, _DQ_FIRST_DATA_ROW + len(exception_report_df) - 1)
+
+    build_engagement_summary_sheet(wb, engagements, engagement_summary_df, as_of, ba_last_row, dq_last_row)
+    actual_ba_last_row = build_budget_actual_sheet(wb, engagements, budget_actual_df, as_of)
     build_sample_invoice_sheet(wb, engagements, invoices)
-    dq_last_row = build_discrepancy_report_sheet(wb, exception_report_df, leader_summary_df, as_of)
+    actual_dq_last_row = build_discrepancy_report_sheet(wb, exception_report_df, leader_summary_df, as_of)
+    assert actual_ba_last_row == ba_last_row and actual_dq_last_row == dq_last_row
     build_portfolio_dashboard_sheet(wb, len(engagements), ba_last_row, dq_last_row, budget_actual_df, as_of)
 
     wb.move_sheet("Portfolio Dashboard", offset=-4)
