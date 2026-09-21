@@ -97,7 +97,7 @@ _ES_HEADERS = [
     "Start Date", "End Date", "Budgeted Hours", "Budgeted $", "Contract Ceiling $",
     "Change Order $", "Approved Ceiling $", "Schedule % Elapsed", "Actual Hours to Date",
     "Actual $ to Date", "Utilization %", "% of Ceiling Consumed", "Budget/Schedule Variance",
-    "Status", "Open Exceptions", "Total Exception $ Impact",
+    "Status", "Open Exceptions", "Total Exception $ Impact", "Ceiling Basis $ to Date",
 ]
 _ES_FIRST_DATA_ROW = 4
 
@@ -121,6 +121,7 @@ def build_engagement_summary_sheet(
     for i, engagement in enumerate(engagements):
         r = _ES_FIRST_DATA_ROW + i
         schedule_pct = float(summary_by_id.loc[engagement.engagement_id, "schedule_pct_elapsed"])
+        ceiling_basis = float(summary_by_id.loc[engagement.engagement_id, "actual_ceiling_basis_to_date"])
         co_amount = round(sum(co.amount for co in engagement.change_orders), 2)
 
         inputs = {
@@ -136,6 +137,10 @@ def build_engagement_summary_sheet(
             "J": engagement.contract_ceiling_dollars,
             "K": co_amount,
             "M": schedule_pct,
+            # Cost-plus contracts are priced/capped on cost + fee, not commercial bill rates,
+            # so ceiling consumption is measured on this basis rather than column O (bill-rate
+            # valued actuals) -- see budget_actual.build_engagement_summary().
+            "V": ceiling_basis,
         }
         for col, val in inputs.items():
             cell = ws[f"{col}{r}"]
@@ -145,7 +150,7 @@ def build_engagement_summary_sheet(
         ws[f"F{r}"].number_format = DATE_FMT
         ws[f"G{r}"].number_format = DATE_FMT
         ws[f"H{r}"].number_format = "#,##0"
-        for col in ("I", "J", "K"):
+        for col in ("I", "J", "K", "V"):
             ws[f"{col}{r}"].number_format = CURRENCY_FMT
         ws[f"M{r}"].number_format = PCT_FMT
 
@@ -154,7 +159,7 @@ def build_engagement_summary_sheet(
             "N": f"=SUMIFS({ba_rng('F')},{ba_rng('A')},A{r})",
             "O": f"=SUMIFS({ba_rng('I')},{ba_rng('A')},A{r})",
             "P": f'=IF(H{r}=0,"",N{r}/H{r})',
-            "Q": f'=IF(L{r}=0,"",O{r}/L{r})',
+            "Q": f'=IF(L{r}=0,"",V{r}/L{r})',
             "R": f"=P{r}-M{r}",
             "S": (
                 f'=IF(P{r}>{OVER_BUDGET_THRESHOLD},"Over Budget",'
@@ -187,7 +192,7 @@ def build_engagement_summary_sheet(
         {
             "A": 12, "B": 30, "C": 34, "D": 20, "E": 14, "F": 12, "G": 12, "H": 13,
             "I": 14, "J": 15, "K": 13, "L": 15, "M": 14, "N": 15, "O": 14, "P": 12,
-            "Q": 15, "R": 14, "S": 22, "T": 12, "U": 16,
+            "Q": 15, "R": 14, "S": 22, "T": 12, "U": 16, "V": 18,
         },
     )
 

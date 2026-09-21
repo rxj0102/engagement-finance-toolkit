@@ -297,7 +297,9 @@ def detect_budget_overruns(engagement_summary_df: pd.DataFrame, engagements: lis
     findings = []
     for _, row in engagement_summary_df.iterrows():
         eng = eng_lookup[row["engagement_id"]]
-        actual = row["actual_dollars_to_date"]
+        # Cost-plus ceilings are priced in cost + fee terms, not commercial bill rates --
+        # actual_ceiling_basis_to_date uses whichever basis actually matches the ceiling.
+        actual = row["actual_ceiling_basis_to_date"]
         approved_ceiling = row["approved_ceiling_dollars"]
         original_ceiling = row["contract_ceiling_dollars"]
         has_co = row["has_change_order"]

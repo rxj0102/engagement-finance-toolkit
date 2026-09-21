@@ -22,7 +22,14 @@ from datetime import date
 
 import pandas as pd
 
-from .engagement_setup import AS_OF_DATE, Engagement, ROLE_ORDER, STANDARD_BILL_RATES
+from .engagement_setup import (
+    AS_OF_DATE,
+    ContractType,
+    Engagement,
+    ROLE_ORDER,
+    STANDARD_BILL_RATES,
+    STANDARD_COST_RATES,
+)
 from .time_expense_tracking import _month_weight  # shared S-curve shape
 
 OVER_BUDGET_THRESHOLD = 1.00  # budget consumed exceeds 100% of total budget
@@ -130,6 +137,20 @@ def build_engagement_summary(
             else 0.0
         )
 
+        # Cost-plus contracts are priced (and capped) on allowable cost + fee, not commercial
+        # bill rates -- comparing bill-rate-valued actuals to a cost-based ceiling would make
+        # every cost-plus engagement look like it blows through its ceiling almost immediately.
+        # Use the basis that actually matches how each contract type's ceiling was set.
+        if engagement.contract_type == ContractType.COST_PLUS:
+            actual_cost_dollars = (
+                (eng_ts["hours"] * eng_ts["role"].map({r.value: STANDARD_COST_RATES[r] for r in ROLE_ORDER})).sum()
+                if not eng_ts.empty
+                else 0.0
+            )
+            ceiling_basis = actual_cost_dollars * (1 + (engagement.cost_plus_fee_pct or 0.0))
+        else:
+            ceiling_basis = actual_dollars_standard
+
         budget_consumed_pct = (actual_hours / engagement.total_budget_hours) if engagement.total_budget_hours else 0.0
         status = _status_for(budget_consumed_pct, schedule_pct)
 
@@ -149,6 +170,7 @@ def build_engagement_summary(
                 "has_change_order": len(engagement.change_orders) > 0,
                 "actual_hours_to_date": round(actual_hours, 1),
                 "actual_dollars_to_date": round(actual_dollars_standard, 2),
+                "actual_ceiling_basis_to_date": round(ceiling_basis, 2),
                 "schedule_pct_elapsed": round(schedule_pct, 3),
                 "budget_pct_consumed": round(budget_consumed_pct, 3),
                 "schedule_budget_variance": round(budget_consumed_pct - schedule_pct, 3),
