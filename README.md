@@ -1,5 +1,7 @@
 # Engagement Finance Toolkit
 
+[![CI](https://github.com/rxj0102/engagement-finance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/rxj0102/engagement-finance-toolkit/actions/workflows/ci.yml)
+
 A synthetic-data toolkit that simulates the financial operations of a mid-size professional
 services practice running multiple concurrent client engagements -- portfolio setup, time &
 expense tracking, budget-to-actual monitoring, draft invoicing, and (the core of it) systematic
