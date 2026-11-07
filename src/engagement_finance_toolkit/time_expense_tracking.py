@@ -272,7 +272,7 @@ def _inject_expense_anomalies(entries: list[ExpenseEntry], rng: random.Random) -
 def timesheets_to_dataframe(entries: list[TimeEntry]) -> pd.DataFrame:
     df = pd.DataFrame([vars(e) for e in entries])
     if not df.empty:
-        df["role"] = df["role"].apply(lambda r: r.value)
+        df["role"] = df["role"].apply(lambda r: getattr(r, "value", r))
         df["month"] = df["work_date"].apply(lambda d: date(d.year, d.month, 1))
         df["billed_amount"] = df["hours"] * df["bill_rate"]
     return df
